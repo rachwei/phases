@@ -1,4 +1,6 @@
 import psycopg2
+
+from datetime import datetime, timedelta
 from langchain.vectorstores.pgvector import PGVector
 from langchain_community.embeddings import OllamaEmbeddings
 
@@ -41,7 +43,25 @@ class VectorRetriever:
         cur.close()
         conn.close()
         return docs
-        
+    
+
+    # TO DO, also add the time into the postgre database
+    def get_relevant_links(self, datetime, k):
+        conn = psycopg2.connect(self.conn_string)
+        cursor = conn.cursor()
+
+        column_name = "collection"
+
+        one_day_ago = datetime.now() - timedelta(days=1)
+        sql_query = f"SELECT {column_name} FROM your_table WHERE insertion_timestamp > %s"
+
+        cursor.execute(sql_query, (one_day_ago,))
+
+        values = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return [value[0] for value in values]
+    
 
     def get_docs(self, query: str, k=5, fetch_k=10):
         result = self.store.max_marginal_relevance_search(query, k=k, fetch_k=fetch_k)

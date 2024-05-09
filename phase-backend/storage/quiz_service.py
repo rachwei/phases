@@ -13,14 +13,22 @@ class QuizService:
         self.quiz_collection = self.db[os.getenv('QUIZ_COLLECTION_NAME')]
         self.user_responses = self.db[os.getenv('QUIZ_RESPONSE_COLLECTION_NAME')]
 
-    def insert_quiz(self, quiz_data):
+    def insert_quiz(self, user_id, quiz):
         """
         Inserts a new quiz into the database.
         
         Parameters:
         - quiz_data (dict): A dictionary containing the quiz data.
         """
-        quiz_data['created_at'] = datetime.now()
+        quiz_data = {
+            "user_id": user_id,
+            "questions": [
+                {"question": q.question, "answers": q.answers, "correct_answer": q.correct_answer} for q in quiz.questions
+            ],
+            "date": quiz.date,
+            "created_at": datetime.now()
+        }
+
         result = self.quiz_collection.insert_one(quiz_data)
         return result.inserted_id
     
@@ -71,50 +79,28 @@ class QuizService:
 
 
 if __name__ == "__main__":
-    quiz_service = QuizService()
-
-#     quiz_data = {
-#         "title": "Sample Quiz",
-#         "questions": [
-#             {
-#                 "question": "What is 2 + 2?",
-#                 "options": ["1", "2", "3", "4"],
-#                 "correct_answer": "4"
-#             },
-#             {
-#                 "question": "What is the capital of France?",
-#                 "options": ["London", "Paris", "Berlin", "Madrid"],
-#                 "correct_answer": "Paris"
-#             }
-#         ]
-#     }
-
-#     quiz_id = quiz_service.insert_quiz(quiz_data)
-#     print("Inserted quiz with ID:", quiz_id)
-
-#     found_quiz = quiz_service.find_quiz_by_id(quiz_id)
-#     print("Found quiz:", found_quiz)
+    print("yey")
 
 # # Find the quiz by its ID
 # found_quiz = quiz_service.find_quiz_by_id(quiz_id)
 # print("Found quiz:", found_quiz)
-quiz_id = "663d27ec309a8cac5a52576e"
+# quiz_id = "663d27ec309a8cac5a52576e"
 
 # Example usage of update_user_response method
-user_id = "example_user_id"
-question_id = 1
-correct = True
+# user_id = "example_user_id"
+# question_id = 1
+# correct = True
 
-# First response to the question
-inserted_id = quiz_service.update_user_response(user_id, quiz_id, question_id, correct)
-print("Inserted user response ID:", inserted_id)
+# # First response to the question
+# inserted_id = quiz_service.update_user_response(user_id, quiz_id, question_id, correct)
+# print("Inserted user response ID:", inserted_id)
 
-# Second response to the same question (updating the previous response)
-correct = False
-inserted_id = quiz_service.update_user_response(user_id, quiz_id, question_id, correct)
-print("Updated user response ID:", inserted_id)
+# # Second response to the same question (updating the previous response)
+# correct = False
+# inserted_id = quiz_service.update_user_response(user_id, quiz_id, question_id, correct)
+# print("Updated user response ID:", inserted_id)
 
-# Third response to the question (updating the previous response)
-correct = True
-inserted_id = quiz_service.update_user_response(user_id, quiz_id, 2, correct)
-print("Updated user response ID:", inserted_id)
+# # Third response to the question (updating the previous response)
+# correct = True
+# inserted_id = quiz_service.update_user_response(user_id, quiz_id, 2, correct)
+# print("Updated user response ID:", inserted_id)
