@@ -4,8 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import List, Optional
 
-from prompts import summarize_prompt
-from prompts import get_quiz
+from prompts import summarize_prompt, get_quiz, summarize_notes
 
 from storage.quiz_service import QuizService
 from storage.user_service import UserService
@@ -50,7 +49,7 @@ class RecallService:
     knowledge_points = 0
 
     def __init__(self, db_connection, collection):
-        self.retriever = VectorRetriever()
+        self.retriever = VectorRetriever(db_connection, collection)
         self.db_connection = db_connection
         self.collection = collection
 
@@ -59,24 +58,45 @@ class RecallService:
     
 
     def getSimilarLinks(self, link: str):
-        relevant_docs = VectorRetriever.get_notes(link)
+        relevant_docs = self.retriever.get_notes(link)
     
         print("Relevant docs: ", relevant_docs)
         notes = "\n----\n".join(
             [f"{doc.page_content}" for doc in relevant_docs]
         )
 
-        related_docs = VectorRetriever.get_docs(notes, k=3)
+        related_docs = self.retriever.get_docs(notes, k=3)
         related_uuids = list(set([{doc.uuid} for doc in related_docs]))
 
-        related_links = VectorRetriever.get_links(related_uuids)
+        related_links = self.retriever.get_links(related_uuids)
         return related_links
 
 
-    def create_summaryy(self, link: str):
+    def create_summary(self, link: str):
         notes = self.get_notes(link)
         response = summarize_prompt(link, notes)
         return response
+    
+
+    def get_daily_summary(self, date: datetime):
+        # get notes from today
+        # feed into prompt
+        print("In the get daily summary function")
+        notes = self.get_notes_from_relevant_links()
+        print(notes)
+
+        if not len(notes):
+            return "You have no saved notes today!"
+        
+        response = summarize_notes(notes)
+        return response
+    
+    
+    def get_notes_from_relevant_links(self):
+        relevant_links = self.get_relevant_links()
+        notes = ' '.join([self.get_notes(link) for link in relevant_links])
+        print("Output from get notes from relevant notes: ", notes)
+        return notes
 
 
     def get_quiz_content(self, link, notes):
@@ -89,16 +109,18 @@ class RecallService:
         answers = [ast.literal_eval(ans) for ans in answers]
         
         return questions, answers
+    
 
     def get_relevant_links(self):
         now = datetime.now()
-        relevant_links = VectorRetriever.get_relevant_links(now)
+        print(type(now))
+        relevant_links = self.retriever.get_relevant_links(now)
 
-        print("Relevant docs: ", relevant_docs)
-        notes = "\n----\n".join(
-            [f"{doc.page_content}" for doc in relevant_docs]
-        )
-        return notes
+        # print("Relevant links: ", relevant_links)
+        # notes = "\n----\n".join(
+        #     [f"{doc.page_content}" for doc in relevant_links]
+        # )
+        return relevant_links
 
     def create_quiz(self, ):
         # get all information, not just from a single link
@@ -121,12 +143,13 @@ class RecallService:
 
 
     def get_notes(self, link):
-        relevant_docs = VectorRetriever.get_notes(link)
-        print("Relevant docs: ", relevant_docs)
-        notes = "\n----\n".join(
-            [f"{doc.page_content}" for doc in relevant_docs]
+        print("Getting notes for link", link)
+        notes = self.retriever.get_notes(link)
+        total_notes = "\n----\n".join(
+            [f"{doc[0]}" for doc in notes]
         )
-        return notes
+        print("Notes: ", total_notes)
+        return total_notes
 
     async def embed_text(self, link: str, notes: str, summary: Optional[str]):
         if not summary:

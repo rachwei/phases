@@ -47,10 +47,11 @@ async def store_doc(db_connection: str, json_data: dict):
     try:
         conn = psycopg2.connect(db_connection)
         sql = "UPDATE langchain_pg_collection SET newest_entry = %s WHERE name = %s"
-        data = (datetime.now(), collection)
+        data = (datetime.now(), link)
 
         cur = conn.cursor()
         cur.execute(sql, data)
+        cur.close()
         conn.commit()
 
         print("Update successful")
@@ -58,7 +59,6 @@ async def store_doc(db_connection: str, json_data: dict):
         print("Error:", e)
         conn.rollback()
     finally:
-        cur.close()
         conn.close()
 
     print("Added pages!")

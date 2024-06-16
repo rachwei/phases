@@ -22,7 +22,7 @@ class VectorRetriever:
         conn = psycopg2.connect(self.conn_string)
         cur = conn.cursor()
         
-        sql = "SELECT e.document FROM langchain_pg_embedding e JOIN langchain_pg_collection c ON e.uuid = c.uuid WHERE c.name = %s;"
+        sql = "SELECT e.document FROM langchain_pg_embedding e JOIN langchain_pg_collection c ON e.collection_id = c.uuid WHERE c.name = %s;"
         cur.execute(sql, (link,))
         docs = cur.fetchall()
 
@@ -46,14 +46,14 @@ class VectorRetriever:
     
 
     # TO DO, also add the time into the postgre database
-    def get_relevant_links(self, datetime, k):
+    def get_relevant_links(self, datetime: datetime):
         conn = psycopg2.connect(self.conn_string)
         cursor = conn.cursor()
 
-        column_name = "collection"
+        column_name = "name"
 
         one_day_ago = datetime.now() - timedelta(days=1)
-        sql_query = f"SELECT {column_name} FROM your_table WHERE insertion_timestamp > %s"
+        sql_query = f"SELECT {column_name} FROM langchain_pg_collection WHERE newest_entry > %s"
 
         cursor.execute(sql_query, (one_day_ago,))
 
