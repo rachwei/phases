@@ -1,5 +1,6 @@
 import os
 
+from bson.objectid import ObjectId
 from dotenv import load_dotenv
 from datetime import datetime
 from pymongo import MongoClient
@@ -30,40 +31,64 @@ class QuizService:
         }
 
         result = self.quiz_collection.insert_one(quiz_data)
-        return result.inserted_id
+        return result
+
+
+    def get_quiz_by_id(self, id):
+        return self.quiz_collection.find_one({"_id": id})
+
+    def get_quiz_from_day(self, date):
+        return self.quiz_collection.find_one({"date": date})
     
-    def update_user_response(self, user_id, quiz_id, question_id, correct):
+
+    def update_user_response(self, user_id, quiz_id, question, answer):
         """
         Updates user's response for a particular question in the quiz.
         
         Parameters:
         - user_id (str): The ID of the user.
         - quiz_id (str): The ID of the quiz.
-        - question_id (int or str): The ID of the question.
-        - correct (bool): True if the response is correct, False otherwise.
+        - question (str): The question.
+        - answer (str): The answer.
         
         Returns:
         - The object ID of the inserted or updated user response.
         """
         inserted_at = datetime.now()
-        exists = self.user_responses.find_one({'user_id': user_id, 'quiz_id': quiz_id})
-        print(exists)
+        quiz_id = ObjectId(quiz_id['$oid'])
+
+        print(quiz_id)
+        correct_answer = self.quiz_collection.find_one(
+            {'_id': quiz_id, 'questions.question': question},
+            {'questions.$': 1}
+        ).get('questions')[0].get('correct_answer')
+
+        correct = answer == correct_answer
+        print("The correct answer: ", correct_answer)
+        print("Was correct? ", correct)
+        exists = self.user_responses.find_one({'quiz_id': quiz_id})
+
         if exists:
             responses = exists.get('responses', [])
+            print(responses)
             for resp in responses:
-                if resp['question_id'] == question_id:
+                if resp['question'] == question:
                     resp['correct'] = correct
-                    self.user_responses.update_one({'user_id': user_id, 'quiz_id': quiz_id, 'responses.question_id': question_id}, {'$set': {'responses.$.correct': correct}})
+                    self.user_responses.update_one({'user_id': user_id, 'quiz_id': quiz_id, 'responses.question': question}, {'$set': {'responses.$.correct': correct}})
                     return exists['_id']
 
-            responses.append({'question_id': question_id, 'correct': correct})
+            responses.append({'question': question, 'correct': correct})
             result = self.user_responses.update_one({'user_id': user_id, 'quiz_id': quiz_id}, {'$set': {'responses': responses, 'inserted_at': inserted_at}}, upsert=True)
             return exists['_id']
         else:
-            result = self.user_responses.insert_one({'user_id': user_id, 'quiz_id': quiz_id, 'responses': [{'question_id': question_id, 'correct': correct}], 'inserted_at': inserted_at})
+            result = self.user_responses.insert_one({'user_id': user_id, 'quiz_id': quiz_id, 'responses': [{'question': question, 'correct': correct}], 'inserted_at': inserted_at})
             return result.inserted_id
 
 
+    def get_user_responses(self, user_id, quiz_id):
+        return self.user_responses.find_one({'quiz_id': quiz_id, 'user_id': user_id})
+    
+    
     def find_quiz_by_id(self, quiz_id):
         """
         Finds a quiz by its ID.

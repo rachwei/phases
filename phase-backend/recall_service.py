@@ -1,10 +1,11 @@
 import ast
-
-from dataclasses import dataclass
+import os
 from datetime import datetime
+from dotenv import load_dotenv
 from typing import List, Optional
 
 from prompts import summarize_prompt, get_quiz, summarize_notes
+from helpers import get_postgre_database
 
 from storage.quiz_service import QuizService
 from storage.user_service import UserService
@@ -17,7 +18,8 @@ from storage.store_doc import store_doc
 
 class Question:
     question: str
-    answers: dict
+    answers: list[str]
+    correct_answer: str
 
     def __init__(self, question, answers, correct_answer):
         self.question = question
@@ -29,10 +31,9 @@ class Quiz:
     questions : List[Question] = []
     date : datetime
 
-    def __init__(self, link, questions):
-        self.date = datetime.now()
-        self.link = link
+    def __init__(self, questions, date):
         self.questions = questions
+        self.date = date
  
     def populate_quiz(self, questions, answers, correct_answers):
         for i in range(len(questions)):
@@ -99,21 +100,32 @@ class RecallService:
         return notes
 
 
-    def get_quiz_content(self, link, notes):
-        result = get_quiz(link, notes) #'["Q1", "Q2", "Q3"]; [["A1", "A2", "A3", "A4"]. ["B1", "B2", "B3"]. ["C1", "C2", "C3", "C4"]]'
-        items = [item.strip() for item in result.split(';')]
+    def get_quiz_content(self, notes):
+        result = get_quiz(notes) #'["Q1", "Q2", "Q3"]; [["A1", "A2", "A3", "A4"]. ["B1", "B2", "B3"]. ["C1", "C2", "C3", "C4"]]'
+        print("Result from get quiz prompt:", result)
+        # "['Who is my favorite singer?', 'You', 'Me', 'Mom', 'Dad'].['Who is my favorite binger?', 'Me', 'You', 'Mom', 'Dad']"
 
-        questions = ast.literal_eval(items[0])
-        answers = items[1][1:-1]
-        answers = [ans.strip() for ans in answers.split('.')]
-        answers = [ast.literal_eval(ans) for ans in answers]
+        # items = [item.strip() for item in result.split('.')]
+        # questions = ast.literal_eval(items[0])
+        # answers = items[1][1:-1]
+        # answers = [ans.strip() for ans in answers.split('.')]
+        # answers = [ast.literal_eval(ans) for ans in answers]
+        items = [item.strip() for item in result.split('.')]
+        questions = []
+        questions = [
+            Question(
+                question=(eval := ast.literal_eval(item))[0],
+                answers=eval[1:],
+                correct_answer=eval[1]
+            )
+            for item in items
+        ]
         
-        return questions, answers
+        return questions
     
 
     def get_relevant_links(self):
         now = datetime.now()
-        print(type(now))
         relevant_links = self.retriever.get_relevant_links(now)
 
         # print("Relevant links: ", relevant_links)
@@ -121,25 +133,34 @@ class RecallService:
         #     [f"{doc.page_content}" for doc in relevant_links]
         # )
         return relevant_links
+    
+    def get_daily_quiz(self, user_id):
+        current_date = datetime.now().date().isoformat()
+        daily_quiz = self.quiz_service.get_quiz_from_day(current_date)
 
-    def create_quiz(self, ):
-        # get all information, not just from a single link
+        if daily_quiz is None:
+            return self.create_quiz(current_date)
+        
+        print("Daily quiz: ", daily_quiz)
+        user_responses = self.quiz_service.get_user_responses(user_id, daily_quiz['_id'])
+
+        return daily_quiz, user_responses
+
+    def create_quiz(self, date):
         relevant_links = self.get_relevant_links()
 
-        notes = [self.get_notes(link) for link in relevant_links].join()
-        questions, answers = self.get_quiz_content(notes) # returns [Q1, Q2, Q3], [[A1, A1, A1, A1], [A2, A2, A2]]...
-        question_objs = [Question(questions[i], answers[i], answers[i][0]) for i in range(len(questions))]
+        notes = ' '.join([self.get_notes(link) for link in relevant_links])
+        question_objs = self.get_quiz_content(notes) # returns [Q1, Q2, Q3], [[A1, A1, A1, A1], [A2, A2, A2]]...
+        print("Creating quiz question objs:", question_objs)
 
-        quiz = Quiz(question_objs)
-        id = self.quiz_service.insert_quiz(quiz)
-
-        return id
+        quiz = Quiz(question_objs, date)
+        inserted_quiz = self.quiz_service.insert_quiz(0, quiz)
+        print("Inserted quiz:", inserted_quiz)
+        return inserted_quiz
     
-    def answerQuestion(self, user_id: int, quiz_id: int, question_id: int, is_correct: bool):
-        # insert into the user response database
-        # at end of quiz, see how many responded correctly
-        id = self.quiz_service.update_user_response(self, user_id, quiz_id, question_id, is_correct)
-        return id is not None
+    def answerQuestion(self, user_id: dict, quiz_id: str, question: str, answer: str):
+        id = self.quiz_service.update_user_response(user_id, quiz_id, question, answer)
+        return id
 
 
     def get_notes(self, link):
@@ -158,29 +179,29 @@ class RecallService:
 
 
 if __name__ == '__main__':
-    # db_connection = os.getenv('QUIZ_COLLECTION_NAME')
-    # collection = os.getenv('QUIZ_COLLECTION_NAME')
+    load_dotenv()
+    database = os.environ["SUPABASE_DATABASE"]
+    collection = os.environ["SUPABASE_EMBEDDING_COLLECTION"]
+    connection_string = get_postgre_database(database=database)
 
-    # recall_service = RecallService(db_connection, collection)
-    # recall_service.
-    result = '["Q1", "Q2", "Q3"]; [["A1", "A2", "A3", "A4"]. ["B1", "B2", "B3"]. ["C1", "C2", "C3", "C4"]]'
-    items = [item.strip() for item in result.split(';')]
+    recall_service = RecallService(connection_string, collection)
+    result = recall_service.get_daily_quiz(0)
+    # result = '["Q1", "Q2", "Q3"]; [["A1", "A2", "A3", "A4"]. ["B1", "B2", "B3"]. ["C1", "C2", "C3", "C4"]]'
+    # items = [item.strip() for item in result.split(';')]
 
-    questions = ast.literal_eval(items[0])
-    print(questions)
+    # questions = ast.literal_eval(items[0])
+    # print(questions)
 
-    answers = items[1][1:-1]
-    answers = [ans.strip() for ans in answers.split('.')]
-    answers = [ast.literal_eval(ans) for ans in answers]
-    print(answers)
+    # answers = items[1][1:-1]
+    # answers = [ans.strip() for ans in answers.split('.')]
+    # answers = [ast.literal_eval(ans) for ans in answers]
+    # print(answers)
 
     # first_list = parsed_items[0]
     # second_list = parsed_items[1:]
 
     # print("First list:", first_list)
     # print("Second list:", second_list)
-
-
 
     # quiz_service = QuizService()
     

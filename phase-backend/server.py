@@ -1,10 +1,11 @@
 import os
-import asyncio
 import logging
+import json
+from bson import json_util
 from datetime import datetime
 from helpers import get_postgre_database
 
-from quart import Quart, render_template, websocket, current_app, request, jsonify
+from quart import Quart, request, jsonify
 from quart_cors import cors
 from dotenv import load_dotenv
 
@@ -71,6 +72,44 @@ def get_daily_summary():
     # response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
     # response.headers["Access-Control-Allow-Methods"] = "GET, POST, PATCH, PUT, DELETE, OPTIONS"
     # response.headers["Access-Control-Allow-Headers"] = "Origin, Content-Type, X-Auth-Token"
+    response.status_code = 200
+    
+    return response
+
+
+
+def parse_json(data):
+    return json.loads(json_util.dumps(data))
+
+
+@app.route('/get_daily_quiz', methods=['GET'])
+def get_daily_quiz():
+    print("In the get daily quiz function")
+    user_id = 0
+    summary, user_responses = recall_service.get_daily_quiz(user_id)
+    print("Quiz has been created")
+    result = {"quiz": summary, "user_responses": user_responses}
+
+    response = jsonify(parse_json(result))
+    print(response)
+    response.status_code = 200
+    
+    return response
+
+
+@app.route('/answer_question_from_quiz', methods=['POST'])
+async def answer_question_from_quiz():
+    print("In the get daily quiz function")
+    data = await request.json
+    print(data)
+    data = data['quiz_contents']
+    print(data)
+
+    result = recall_service.answerQuestion(data['user_id'], data['quiz_id'], data['question'], data['answer'])
+    print("Quiz has been answered")
+
+    response = jsonify(parse_json(result))
+    print(response)
     response.status_code = 200
     
     return response

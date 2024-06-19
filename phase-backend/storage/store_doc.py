@@ -1,16 +1,12 @@
-import os
+import asyncio
 import psycopg2
 from datetime import datetime
 
-from langchain_community.document_loaders import PyPDFLoader, UnstructuredPDFLoader, PyPDFium2Loader
-from langchain_community.document_loaders import PyPDFDirectoryLoader, DirectoryLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter, CharacterTextSplitter
 from langchain.docstore.document import Document
 from langchain.vectorstores.pgvector import PGVector
 from langchain_community.embeddings import OllamaEmbeddings
 from helpers import get_postgre_database
-
-import asyncio
 
 
 async def store_doc(db_connection: str, json_data: dict):
